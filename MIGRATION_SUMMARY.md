@@ -167,7 +167,7 @@ audio-hotplug/
    ```python
    # Wrong:
    import audio-hotplug
-   
+
    # Correct:
    import audio_hotplug
    ```
@@ -186,12 +186,12 @@ audio-hotplug/
 
 ## Success Criteria
 
-✅ audio-hotplug published to PyPI  
-✅ Tests passing on all platforms  
-✅ LedFx PR shows <15 files changed  
-✅ LedFx works with PyPI package  
-✅ Audio device hotplugging works  
-✅ No formatting issues in PR  
+✅ audio-hotplug published to PyPI
+✅ Tests passing on all platforms
+✅ LedFx PR shows <15 files changed
+✅ LedFx works with PyPI package
+✅ Audio device hotplugging works
+✅ No formatting issues in PR
 
 ## Ready to Start?
 
