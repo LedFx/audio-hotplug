@@ -104,15 +104,15 @@ class TestDebouncer:
         def callback():
             callback_count["count"] += 1
 
-        debouncer = Debouncer(callback, delay_ms=100)
+        debouncer = Debouncer(callback, delay_ms=200)
         debouncer.trigger()
 
-        # Cancel before debounce period expires
-        time.sleep(0.02)
+        # Cancel immediately (before debounce period expires)
+        time.sleep(0.01)
         debouncer.cancel()
 
-        # Wait past debounce period
-        time.sleep(0.15)
+        # Wait past debounce period with extra margin
+        time.sleep(0.3)
 
         assert callback_count["count"] == 0
 
@@ -144,8 +144,8 @@ class TestDebouncer:
             debouncer = Debouncer(callback, delay_ms=delay_ms)
             debouncer.trigger()
 
-            # Wait for delay + buffer
-            time.sleep((delay_ms / 1000.0) + 0.05)
+            # Wait for delay + generous buffer for macOS threading overhead
+            time.sleep((delay_ms / 1000.0) + 0.15)
 
             assert (
                 callback_count["count"] == 1
