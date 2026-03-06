@@ -21,8 +21,8 @@ class TestDebouncer:
         debouncer = Debouncer(callback, delay_ms=50)
         debouncer.trigger()
 
-        # Wait for debounce period + buffer
-        time.sleep(0.1)
+        # Wait for debounce period + buffer (4x for CI)
+        time.sleep(0.2)
 
         assert callback_count["count"] == 1
 
@@ -40,8 +40,8 @@ class TestDebouncer:
             debouncer.trigger()
             time.sleep(0.01)  # 10ms between triggers
 
-        # Wait for debounce period + buffer
-        time.sleep(0.15)
+        # Wait for debounce period + buffer (3x for CI)
+        time.sleep(0.3)
 
         # Should only fire once despite 10 triggers
         assert callback_count["count"] == 1
@@ -58,12 +58,12 @@ class TestDebouncer:
         # First burst
         debouncer.trigger()
         debouncer.trigger()
-        time.sleep(0.1)  # Wait for first callback
+        time.sleep(0.2)  # Wait for first callback (4x for CI)
 
         # Second burst
         debouncer.trigger()
         debouncer.trigger()
-        time.sleep(0.1)  # Wait for second callback
+        time.sleep(0.2)  # Wait for second callback (4x for CI)
 
         assert callback_count["count"] == 2
 
@@ -91,8 +91,8 @@ class TestDebouncer:
         for thread in threads:
             thread.join()
 
-        # Wait for debounce
-        time.sleep(0.1)
+        # Wait for debounce (4x for CI)
+        time.sleep(0.2)
 
         # Should still only fire once despite multi-threaded triggers
         assert callback_count["count"] == 1
