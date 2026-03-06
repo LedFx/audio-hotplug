@@ -147,9 +147,7 @@ class TestDebouncer:
             # Wait for delay + generous buffer for macOS threading overhead
             time.sleep((delay_ms / 1000.0) + 0.15)
 
-            assert (
-                callback_count["count"] == 1
-            ), f"Failed for delay_ms={delay_ms}"
+            assert callback_count["count"] == 1, f"Failed for delay_ms={delay_ms}"
 
 
 if __name__ == "__main__":

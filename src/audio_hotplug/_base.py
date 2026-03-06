@@ -3,8 +3,8 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable
-from typing import Callable, Optional, Union
+from collections.abc import Awaitable, Callable
+from typing import Union
 
 from ._debounce import Debouncer
 
@@ -20,22 +20,24 @@ class AudioDeviceMonitor(ABC):
 
     def __init__(
         self,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
         debounce_ms: int = 200,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         """Initialize the monitor.
 
         Args:
-            loop: Event loop for callback scheduling. If None, attempts to get running loop.
-            debounce_ms: Milliseconds to wait before invoking callback after last change.
+            loop: Event loop for callback scheduling. If None,
+                attempts to get running loop.
+            debounce_ms: Milliseconds to wait before invoking
+                callback after last change.
             logger: Logger instance. If None, creates a logger for this class.
         """
         self._loop = loop
         self._debounce_ms = debounce_ms
         self._logger = logger or logging.getLogger(self.__class__.__name__)
-        self._callback: Optional[Callback] = None
-        self._debouncer: Optional[Debouncer] = None
+        self._callback: Callback | None = None
+        self._debouncer: Debouncer | None = None
         self._running = False
 
     @abstractmethod
@@ -91,16 +93,12 @@ class AudioDeviceMonitor(ABC):
                 try:
                     callback()
                 except Exception as e:
-                    self._logger.error(
-                        f"Error in callback: {e}", exc_info=True
-                    )
+                    self._logger.error(f"Error in callback: {e}", exc_info=True)
                 return
 
         # Schedule on loop thread
         if asyncio.iscoroutinefunction(callback):
-            asyncio.run_coroutine_threadsafe(
-                self._safe_async_callback(callback), loop
-            )
+            asyncio.run_coroutine_threadsafe(self._safe_async_callback(callback), loop)
         else:
             loop.call_soon_threadsafe(self._safe_sync_callback, callback)
 

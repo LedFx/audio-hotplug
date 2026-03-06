@@ -89,7 +89,7 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                     self, pwstrDeviceId, dwNewState
                 ):
                     self.logger.debug(
-                        f"Device state changed: {pwstrDeviceId} state={dwNewState}"
+                        f"Device state changed: {pwstrDeviceId} " f"state={dwNewState}"
                     )
                     self.callback()
                     return 0
@@ -98,15 +98,17 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                     self, flow, role, pwstrDefaultDeviceId
                 ):
                     self.logger.debug(
-                        f"Default device changed: {pwstrDefaultDeviceId}"
+                        f"Default device changed: " f"{pwstrDefaultDeviceId}"
                     )
-                    # Don't fire event for default device change, only for list changes
+                    # Don't fire for default device change, only list
+                    # changes
                     return 0
 
                 def IMMNotificationClient_OnPropertyValueChanged(
                     self, pwstrDeviceId, key
                 ):
-                    # Properties changing doesn't mean the device list changed
+                    # Properties changing doesn't mean device list
+                    # changed
                     return 0
 
             # Register for notifications (must run on separate thread to avoid blocking)
@@ -119,10 +121,12 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                         comtypes.CLSCTX_INPROC_SERVER,
                     )
 
-                    # Create notification client in this thread (COM apartment threading)
+                    # Create notification client in this thread
+                    # (COM apartment threading)
                     # Trigger debouncer when device changes occur
                     self._notification_client = DeviceNotificationClient(
-                        lambda: self._debouncer.trigger(), self._logger
+                        lambda: self._debouncer.trigger(),
+                        self._logger,
                     )
 
                     device_enumerator.RegisterEndpointNotificationCallback(
@@ -140,9 +144,9 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                         if hasattr(self, "_device_enumerator") and hasattr(
                             self, "_notification_client"
                         ):
-                            self._device_enumerator.UnregisterEndpointNotificationCallback(
-                                self._notification_client
-                            )
+                            enumerator = self._device_enumerator
+                            client = self._notification_client
+                            enumerator.UnregisterEndpointNotificationCallback(client)
                     except Exception:
                         pass
                     comtypes.CoUninitialize()
@@ -157,8 +161,9 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
 
         except ImportError as e:
             self._logger.warning(
-                f"pycaw not available - cannot monitor Windows audio device changes: {e}. "
-                "Install with: uv pip install 'audio-hotplug[windows]'"
+                f"pycaw not available - cannot monitor Windows "
+                f"audio device changes: {e}. Install with: "
+                "uv pip install 'audio-hotplug[windows]'"
             )
             raise
         except Exception as e:

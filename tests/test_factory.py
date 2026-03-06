@@ -104,15 +104,11 @@ class TestFactory:
         """Test that ImportError on Windows is handled gracefully."""
         # Simulate ImportError by patching the import within the factory
         with patch("audio_hotplug.monitor.sys.platform", "win32"):
-            with patch.dict(
-                "sys.modules", {"audio_hotplug._platform.windows": None}
-            ):
+            with patch.dict("sys.modules", {"audio_hotplug._platform.windows": None}):
                 # This will cause an import error which should be caught
                 monitor = create_monitor()
                 # Should return None or valid monitor, not raise
-                assert monitor is None or isinstance(
-                    monitor, AudioDeviceMonitor
-                )
+                assert monitor is None or isinstance(monitor, AudioDeviceMonitor)
 
     def test_multiple_monitors_independent(self):
         """Test that multiple monitor instances are independent."""

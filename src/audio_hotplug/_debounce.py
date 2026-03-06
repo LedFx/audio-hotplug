@@ -1,11 +1,12 @@
 """Thread-safe debouncer for coalescing rapid events."""
 
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 
 class Debouncer:
-    """Thread-safe debouncer that coalesces rapid triggers into a single callback.
+    """Thread-safe debouncer that coalesces rapid triggers into
+    a single callback.
 
     When triggered multiple times within the debounce period, only invokes
     the callback once after the period expires from the last trigger.
@@ -16,7 +17,8 @@ class Debouncer:
 
         Args:
             callback: Function to invoke after debounce period.
-            delay_ms: Milliseconds to wait after last trigger before invoking callback.
+            delay_ms: Milliseconds to wait after last trigger before
+                invoking callback.
         """
         self._callback = callback
         self._delay_s = delay_ms / 1000.0
