@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include TESTING.md
+include pyproject.toml
+recursive-include src/audio_hotplug *.py py.typed
+recursive-include tests *.py
+prune tests/__pycache__
+prune src/audio_hotplug/__pycache__
+global-exclude *.pyc
+global-exclude __pycache__
