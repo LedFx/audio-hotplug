@@ -1,14 +1,14 @@
 """Abstract base class for audio device monitors."""
 
 import asyncio
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import Union
 
 from ._debounce import Debouncer
 
-Callback = Union[Callable[[], None], Callable[[], Awaitable[None]]]
+Callback = Callable[[], None] | Callable[[], Awaitable[None]]
 
 
 class AudioDeviceMonitor(ABC):
@@ -63,6 +63,12 @@ class AudioDeviceMonitor(ABC):
         Args:
             on_change: The user's callback to debounce.
         """
+        # Resolve the loop on the caller thread, before Timer callbacks run.
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
         self._callback = on_change
         self._running = True
         # Debouncer will call _notify when triggered
@@ -85,7 +91,7 @@ class AudioDeviceMonitor(ABC):
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 # No running loop, call sync callback directly
-                if asyncio.iscoroutinefunction(callback):
+                if inspect.iscoroutinefunction(callback):
                     self._logger.error(
                         "Async callback provided but no event loop available"
                     )
@@ -97,7 +103,7 @@ class AudioDeviceMonitor(ABC):
                 return
 
         # Schedule on loop thread
-        if asyncio.iscoroutinefunction(callback):
+        if inspect.iscoroutinefunction(callback):
             asyncio.run_coroutine_threadsafe(self._safe_async_callback(callback), loop)
         else:
             loop.call_soon_threadsafe(self._safe_sync_callback, callback)

@@ -41,8 +41,7 @@ class LinuxAudioDeviceMonitor(AudioDeviceMonitor):
 
                         if device.action in ("add", "remove"):
                             self._logger.debug(
-                                f"Sound device {device.action}: "
-                                f"{device.device_node}"
+                                f"Sound device {device.action}: {device.device_node}"
                             )
                             self._debouncer.trigger()
 

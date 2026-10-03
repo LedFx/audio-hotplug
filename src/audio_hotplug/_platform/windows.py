@@ -89,7 +89,7 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                     self, pwstrDeviceId, dwNewState
                 ):
                     self.logger.debug(
-                        f"Device state changed: {pwstrDeviceId} " f"state={dwNewState}"
+                        f"Device state changed: {pwstrDeviceId} state={dwNewState}"
                     )
                     self.callback()
                     return 0
@@ -97,9 +97,7 @@ class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
                 def IMMNotificationClient_OnDefaultDeviceChanged(
                     self, flow, role, pwstrDefaultDeviceId
                 ):
-                    self.logger.debug(
-                        f"Default device changed: " f"{pwstrDefaultDeviceId}"
-                    )
+                    self.logger.debug(f"Default device changed: {pwstrDefaultDeviceId}")
                     # Don't fire for default device change, only list
                     # changes
                     return 0

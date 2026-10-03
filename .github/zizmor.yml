@@ -1,0 +1,5 @@
+# The app token creates release PRs and tags; publishing uses the pypi environment.
+rules:
+  secrets-outside-env:
+    ignore:
+      - release-please.yml

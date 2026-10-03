@@ -1,0 +1,36 @@
+# Release PR and draft release only; publish.yml validates and publishes tags.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release PR, tag and draft release
+    runs-on: ubuntu-latest
+    if: github.repository == 'LedFx/audio-hotplug'
+    timeout-minutes: 10
+    steps:
+      # The app token, not GITHUB_TOKEN: CI must run on the release PR, and a
+      # tag pushed with GITHUB_TOKEN would not trigger the publish pipeline.
+      - id: mint
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.AUTOMATION_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+          permission-contents: write  # release branch, version tag, draft release
+          permission-pull-requests: write  # the release PR
+          permission-issues: write  # the autorelease labels on it
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.mint.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
