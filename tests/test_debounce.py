@@ -152,3 +152,89 @@ class TestDebouncer:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_burst_reuses_timer_and_reschedules_remaining_delay(monkeypatch):
+    """An event burst should not create one OS thread per event."""
+    from unittest.mock import Mock
+
+    timers = []
+    now = [10.0]
+
+    class Timer:
+        def __init__(self, delay, callback, args):
+            self.delay, self.callback, self.args = delay, callback, args
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+        def fire(self):
+            self.callback(*self.args)
+
+    monkeypatch.setattr("audio_hotplug._debounce.threading.Timer", Timer)
+    monkeypatch.setattr("audio_hotplug._debounce.time.monotonic", lambda: now[0])
+    callback = Mock()
+    debouncer = Debouncer(callback, delay_ms=100)
+    debouncer.trigger()
+    now[0] = 10.05
+    for _ in range(1000):
+        debouncer.trigger()
+    assert len(timers) == 1
+    now[0] = 10.1
+    timers[0].fire()
+    assert len(timers) == 2
+    assert timers[1].delay == pytest.approx(0.05)
+    callback.assert_not_called()
+    now[0] = 10.2
+    timers[1].fire()
+    callback.assert_called_once_with()
+    assert debouncer._timer is None
+
+
+def test_cancel_invalidates_timer_and_close_rejects_late_events(monkeypatch):
+    from unittest.mock import Mock
+
+    timers = []
+
+    def make_timer(delay, callback, args):
+        timer = Mock()
+        timer.fire = lambda: callback(*args)
+        timers.append(timer)
+        return timer
+
+    monkeypatch.setattr("audio_hotplug._debounce.threading.Timer", make_timer)
+    callback = Mock()
+    debouncer = Debouncer(callback, delay_ms=0)
+    debouncer.trigger()
+    debouncer.cancel()
+    debouncer.trigger()
+    timers[0].fire()  # Simulate a cancelled timer already entering its callback.
+    callback.assert_not_called()
+    timers[1].fire()
+    callback.assert_called_once_with()
+    debouncer.close()
+    debouncer.trigger()
+    assert len(timers) == 2
+
+
+def test_timer_start_failure_allows_retry(monkeypatch):
+    from unittest.mock import Mock
+
+    timer = Mock()
+    timer.start.side_effect = RuntimeError("no thread available")
+    monkeypatch.setattr(
+        "audio_hotplug._debounce.threading.Timer", Mock(return_value=timer)
+    )
+    debouncer = Debouncer(Mock())
+    with pytest.raises(RuntimeError):
+        debouncer.trigger()
+    assert debouncer._timer is None
+    timer.start.side_effect = None
+    debouncer.trigger()
+    assert timer.start.call_count == 2
+    debouncer.close()

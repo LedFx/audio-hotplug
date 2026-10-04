@@ -40,12 +40,12 @@ windows = [
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.1.14" },
-    { name = "comtypes", marker = "extra == 'windows'", specifier = ">=1.1.14" },
+    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4.8" },
+    { name = "comtypes", marker = "extra == 'windows'", specifier = ">=1.4.8" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20220416" },
-    { name = "pycaw", marker = "extra == 'windows'", specifier = ">=20220416" },
+    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20260927" },
+    { name = "pycaw", marker = "extra == 'windows'", specifier = ">=20260927" },
     { name = "pyobjc-framework-coreaudio", marker = "sys_platform == 'darwin'", specifier = ">=9.0" },
     { name = "pyobjc-framework-coreaudio", marker = "extra == 'macos'", specifier = ">=9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -767,15 +767,15 @@ wheels = [
 
 [[package]]
 name = "pycaw"
-version = "20251023"
+version = "20260927"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "comtypes" },
     { name = "psutil" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d1/81/19181e3118a503f94d8689fbbed60616e85d08cee3a295c11245ae73018f/pycaw-20251023.tar.gz", hash = "sha256:19935b92eb5efc3f3ea5ee8a2d37ca49009e9dc00f83d067b74b9922e84b5b3b", size = 23421, upload-time = "2025-10-23T18:26:45.087Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9e/51/2870619bf47cef359505d88d277b71c18ae5af18ffe94e707dbce6def6c2/pycaw-20260927.tar.gz", hash = "sha256:3a833ace1a76d0cee134366366d64c56ea9552ebc6f572580e4299ad552743f6", size = 29644, upload-time = "2026-09-26T20:05:02.191Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/bc/f60c1622da5c53770c2d62457b5b6fc9623ab41b9d276269b857cd337e22/pycaw-20251023-py3-none-any.whl", hash = "sha256:ef06d234a2fe3c175925a2a8c7ed8824e450851014fdb7d900af1b56ce422d4e", size = 25849, upload-time = "2025-10-23T18:26:43.955Z" },
+    { url = "https://files.pythonhosted.org/packages/af/79/baf93a0a0b53a886f6a84ac05dd8491068c8a7c54db4ccd247acdcff9d1c/pycaw-20260927-py3-none-any.whl", hash = "sha256:d5b162a87536956af8dfa0fc53b1c77870a30706445ffd7f92a2ed184f65ddf4", size = 28463, upload-time = "2026-09-26T20:05:00.817Z" },
 ]
 
 [[package]]

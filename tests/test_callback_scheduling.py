@@ -215,3 +215,46 @@ async def test_async_context():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.asyncio
+async def test_initialize_captures_loop_for_native_thread():
+    """Implicit loop detection must happen before a worker sends events."""
+    monitor = MockMonitor()
+    received = asyncio.Event()
+
+    async def callback():
+        received.set()
+
+    monitor._initialize_debouncer(callback)
+    try:
+        assert monitor._loop is asyncio.get_running_loop()
+        thread = threading.Thread(target=monitor._debouncer._invoke_callback)
+        thread.start()
+        thread.join()
+        await asyncio.wait_for(received.wait(), timeout=1)
+    finally:
+        monitor._cancel_debouncer()
+
+
+@pytest.mark.parametrize("is_async", [False, True])
+def test_closed_loop_does_not_leak_coroutine(is_async, caplog):
+    from unittest.mock import Mock, patch
+
+    loop = asyncio.new_event_loop()
+    loop.close()
+    monitor = MockMonitor(loop=loop)
+
+    async def async_callback():
+        pass
+
+    if is_async:
+        coroutine = monitor._safe_async_callback(async_callback)
+        with patch.object(
+            monitor, "_safe_async_callback", new=Mock(return_value=coroutine)
+        ):
+            monitor._notify(async_callback)
+        assert coroutine.cr_frame is None
+    else:
+        monitor._notify(Mock())
+    assert "closed loop" in caplog.text

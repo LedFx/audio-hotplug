@@ -2,13 +2,13 @@
 
 import asyncio
 import logging
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
-from typing import Union
 
 from ._debounce import Debouncer
 
-Callback = Union[Callable[[], None], Callable[[], Awaitable[None]]]
+Callback = Callable[[], None] | Callable[[], Awaitable[None]]
 
 
 class AudioDeviceMonitor(ABC):
@@ -39,6 +39,7 @@ class AudioDeviceMonitor(ABC):
         self._callback: Callback | None = None
         self._debouncer: Debouncer | None = None
         self._running = False
+        self._callback_stop_event = threading.Event()
 
     @abstractmethod
     def start(self, on_change: Callback) -> None:
@@ -63,12 +64,41 @@ class AudioDeviceMonitor(ABC):
         Args:
             on_change: The user's callback to debounce.
         """
-        self._callback = on_change
+        # Capture the loop on the caller's thread, before native notifications
+        # arrive on a worker without a running asyncio loop.
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+        stopped = threading.Event()
+        self._callback_stop_event = stopped
+        if asyncio.iscoroutinefunction(on_change):
+
+            async def guarded_callback():
+                if not stopped.is_set():
+                    await on_change()
+
+        else:
+
+            def guarded_callback():
+                if not stopped.is_set():
+                    on_change()
+
+        self._callback = guarded_callback
         self._running = True
         # Debouncer will call _notify when triggered
         self._debouncer = Debouncer(
-            lambda: self._notify(on_change), delay_ms=self._debounce_ms
+            lambda: self._notify(guarded_callback), delay_ms=self._debounce_ms
         )
+
+    def _cancel_debouncer(self) -> None:
+        """Disable this run, including notifications already queued on a loop."""
+        self._running = False
+        self._callback_stop_event.set()
+        if self._debouncer is not None:
+            self._debouncer.close()
+        self._callback = None
 
     def _notify(self, callback: Callback) -> None:
         """Schedule callback on the event loop thread safely.
@@ -98,9 +128,17 @@ class AudioDeviceMonitor(ABC):
 
         # Schedule on loop thread
         if asyncio.iscoroutinefunction(callback):
-            asyncio.run_coroutine_threadsafe(self._safe_async_callback(callback), loop)
+            coroutine = self._safe_async_callback(callback)
+            try:
+                asyncio.run_coroutine_threadsafe(coroutine, loop)
+            except RuntimeError:
+                coroutine.close()
+                self._logger.warning("Cannot schedule audio callback on a closed loop")
         else:
-            loop.call_soon_threadsafe(self._safe_sync_callback, callback)
+            try:
+                loop.call_soon_threadsafe(self._safe_sync_callback, callback)
+            except RuntimeError:
+                self._logger.warning("Cannot schedule audio callback on a closed loop")
 
     def _safe_sync_callback(self, callback: Callable[[], None]) -> None:
         """Wrap sync callback with error handling."""

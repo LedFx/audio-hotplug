@@ -141,6 +141,16 @@ Abstract base class for platform monitors.
 - `start(on_change: Callback)` - Start monitoring, call `on_change` when devices change
 - `stop()` - Stop monitoring (safe to call multiple times)
 
+Call `stop()` before starting an existing monitor again. `start()` reports native
+initialization failures to the caller; Linux and Windows wait up to five seconds
+for their worker to initialize. `stop()` disables pending notifications and waits
+up to two seconds for a Linux or Windows worker to exit. A callback already
+executing is allowed to finish.
+
+If native cleanup fails or a worker has not exited, the monitor logs a warning
+and retains the resources needed for safe cleanup. Call `stop()` again to retry;
+restarting is rejected until the previous registration or worker is gone.
+
 **Callback signature:**
 ```python
 # Sync callback
