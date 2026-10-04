@@ -1,180 +1,95 @@
 """Windows audio device monitor using Core Audio API (pycaw)."""
 
-import logging
-import threading
-
-from .._base import AudioDeviceMonitor, Callback
-
-_LOGGER = logging.getLogger(__name__)
+from .._base import Callback
+from ._threaded import ThreadedAudioDeviceMonitor, _WorkerState
 
 
-class WindowsAudioDeviceMonitor(AudioDeviceMonitor):
-    """Windows audio device monitor using IMMNotificationClient."""
+class WindowsAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
+    """Own the notification client and enumerator in one COM apartment."""
 
     def start(self, on_change: Callback) -> None:
-        """Start monitoring using Core Audio API."""
-        # Initialize debouncer with user callback
-        self._initialize_debouncer(on_change)
+        # comtypes initializes the importing thread's apartment. Import here so
+        # its default STA initialization cannot conflict with our worker's MTA.
+        import comtypes  # noqa: F401
 
+        super().start(on_change)
+
+    def _run(self, state: _WorkerState) -> None:
+        import comtypes
+        from pycaw.api.mmdeviceapi import IMMDeviceEnumerator, IMMNotificationClient
+        from pycaw.constants import CLSID_MMDeviceEnumerator
+
+        class DeviceNotificationClient(comtypes.COMObject):
+            # Use pycaw's ABI, notably PROPERTYKEY passed by value.
+            _com_interfaces_ = [IMMNotificationClient]
+
+            def OnDeviceAdded(self, device_id):  # noqa: N802
+                state.events.put(True)
+                return 0
+
+            def OnDeviceRemoved(self, device_id):  # noqa: N802
+                state.events.put(True)
+                return 0
+
+            def OnDeviceStateChanged(self, device_id, new_state):  # noqa: N802
+                state.events.put(True)
+                return 0
+
+            def OnDefaultDeviceChanged(self, flow, role, device_id):  # noqa: N802
+                return 0
+
+            def OnPropertyValueChanged(self, device_id, key):  # noqa: N802
+                return 0
+
+        # A dedicated MTA worker needs no STA message pump. Callbacks only enqueue
+        # work; they never wait for timers, cleanup, or user callbacks.
+        comtypes.CoInitializeEx(comtypes.COINIT_MULTITHREADED)
+        enumerator = None
+        client = None
+        registered = False
+        failure = None
         try:
-            from ctypes import POINTER
-
-            import comtypes
-            from comtypes import COMMETHOD, GUID
-            from pycaw.constants import CLSID_MMDeviceEnumerator
-            from pycaw.pycaw import IMMDeviceEnumerator
-
-            self._logger.info("Starting Windows audio device monitor")
-
-            # Define IMMNotificationClient interface for comtypes
-            class IMMNotificationClient(comtypes.IUnknown):
-                _iid_ = GUID("{7991EEC9-7E89-4D85-8390-6C703CEC60C0}")
-                _methods_ = [
-                    COMMETHOD(
-                        [],
-                        comtypes.HRESULT,
-                        "OnDeviceStateChanged",
-                        (["in"], comtypes.c_wchar_p, "pwstrDeviceId"),
-                        (["in"], comtypes.c_ulong, "dwNewState"),
-                    ),
-                    COMMETHOD(
-                        [],
-                        comtypes.HRESULT,
-                        "OnDeviceAdded",
-                        (["in"], comtypes.c_wchar_p, "pwstrDeviceId"),
-                    ),
-                    COMMETHOD(
-                        [],
-                        comtypes.HRESULT,
-                        "OnDeviceRemoved",
-                        (["in"], comtypes.c_wchar_p, "pwstrDeviceId"),
-                    ),
-                    COMMETHOD(
-                        [],
-                        comtypes.HRESULT,
-                        "OnDefaultDeviceChanged",
-                        (["in"], comtypes.c_int, "flow"),
-                        (["in"], comtypes.c_int, "role"),
-                        (["in"], comtypes.c_wchar_p, "pwstrDefaultDeviceId"),
-                    ),
-                    COMMETHOD(
-                        [],
-                        comtypes.HRESULT,
-                        "OnPropertyValueChanged",
-                        (["in"], comtypes.c_wchar_p, "pwstrDeviceId"),
-                        (["in"], POINTER(comtypes.c_int), "key"),
-                    ),
-                ]
-
-            # Create concrete implementation
-            class DeviceNotificationClient(comtypes.COMObject):
-                _com_interfaces_ = [IMMNotificationClient]
-
-                def __init__(self, callback, logger):
-                    super().__init__()
-                    self.callback = callback
-                    self.logger = logger
-
-                def IMMNotificationClient_OnDeviceAdded(self, pwstrDeviceId):
-                    self.logger.debug(f"Device added: {pwstrDeviceId}")
-                    self.callback()
-                    return 0
-
-                def IMMNotificationClient_OnDeviceRemoved(self, pwstrDeviceId):
-                    self.logger.debug(f"Device removed: {pwstrDeviceId}")
-                    self.callback()
-                    return 0
-
-                def IMMNotificationClient_OnDeviceStateChanged(
-                    self, pwstrDeviceId, dwNewState
-                ):
-                    self.logger.debug(
-                        f"Device state changed: {pwstrDeviceId} state={dwNewState}"
-                    )
-                    self.callback()
-                    return 0
-
-                def IMMNotificationClient_OnDefaultDeviceChanged(
-                    self, flow, role, pwstrDefaultDeviceId
-                ):
-                    self.logger.debug(f"Default device changed: {pwstrDefaultDeviceId}")
-                    # Don't fire for default device change, only list
-                    # changes
-                    return 0
-
-                def IMMNotificationClient_OnPropertyValueChanged(
-                    self, pwstrDeviceId, key
-                ):
-                    # Properties changing doesn't mean device list
-                    # changed
-                    return 0
-
-            # Register for notifications (must run on separate thread to avoid blocking)
-            def monitor_thread():
-                comtypes.CoInitialize()
-                try:
-                    device_enumerator = comtypes.CoCreateInstance(
-                        CLSID_MMDeviceEnumerator,
-                        IMMDeviceEnumerator,
-                        comtypes.CLSCTX_INPROC_SERVER,
-                    )
-
-                    # Create notification client in this thread
-                    # (COM apartment threading)
-                    # Trigger debouncer when device changes occur
-                    self._notification_client = DeviceNotificationClient(
-                        lambda: self._debouncer.trigger(),
-                        self._logger,
-                    )
-
-                    device_enumerator.RegisterEndpointNotificationCallback(
-                        self._notification_client
-                    )
-                    self._device_enumerator = device_enumerator
-                    self._logger.info("Windows audio device monitor started")
-
-                    # Keep thread alive - COM callbacks are event-driven by Windows
-                    # We just wait here until stop() is called
-                    self._stop_event.wait()
-
-                finally:
+            enumerator = comtypes.CoCreateInstance(
+                CLSID_MMDeviceEnumerator,
+                IMMDeviceEnumerator,
+                comtypes.CLSCTX_INPROC_SERVER,
+            )
+            client = DeviceNotificationClient()
+            enumerator.RegisterEndpointNotificationCallback(client)
+            registered = True
+            state.ready.set()
+            self._logger.info("Windows audio device monitor started")
+            while not state.stopped.is_set():
+                state.events.get()
+                if not state.stopped.is_set():
+                    state.debouncer.trigger()
+        except Exception as error:
+            # A native-call traceback may retain the enumerator/client. Drop
+            # those frames before releasing the apartment's resources below.
+            failure = error.with_traceback(None)
+        finally:
+            self._cancel_debouncer()
+            if registered:
+                # Do not drop the callback or tear down COM after failed removal:
+                # Windows still holds its pointer. Retry on the next stop request.
+                while True:
                     try:
-                        if hasattr(self, "_device_enumerator") and hasattr(
-                            self, "_notification_client"
-                        ):
-                            enumerator = self._device_enumerator
-                            client = self._notification_client
-                            enumerator.UnregisterEndpointNotificationCallback(client)
-                    except Exception:
-                        pass
-                    comtypes.CoUninitialize()
-
-            # Initialize state before starting thread to avoid race conditions
-            self._stop_event = threading.Event()
-
-            self._monitor_thread = threading.Thread(
-                target=monitor_thread, daemon=True, name="AudioDeviceMonitor"
-            )
-            self._monitor_thread.start()
-
-        except ImportError as e:
-            self._logger.warning(
-                f"pycaw not available - cannot monitor Windows "
-                f"audio device changes: {e}. Install with: "
-                "uv pip install 'audio-hotplug[windows]'"
-            )
-            raise
-        except Exception as e:
-            self._logger.error(
-                f"Failed to start Windows audio device monitor: {e}",
-                exc_info=True,
-            )
-            raise
-
-    def stop(self) -> None:
-        """Stop monitoring."""
-        self._running = False
-        if hasattr(self, "_stop_event"):
-            self._stop_event.set()  # Wake up the waiting thread
-        if self._debouncer:
-            self._debouncer.cancel()
+                        enumerator.UnregisterEndpointNotificationCallback(client)
+                        break
+                    except Exception as error:
+                        self._logger.warning(
+                            "Failed to unregister Windows audio listener: %s; "
+                            "call stop() to retry",
+                            str(error),
+                        )
+                        # Consume pending notifications until another stop request.
+                        # The first stop token may still be queued; retrying once
+                        # immediately is harmless and does not busy-loop.
+                        while state.events.get() is not None:
+                            pass
+            # Release apartment-owned pointers before uninitializing COM.
+            client = None
+            enumerator = None
+            comtypes.CoUninitialize()
+        if failure is not None:
+            raise failure

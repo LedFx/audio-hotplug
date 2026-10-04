@@ -27,15 +27,15 @@ classifiers = [
 
 # Platform-specific dependencies using markers
 dependencies = [
-    "pycaw>=20220416; platform_system=='Windows'",
-    "comtypes>=1.1.14; platform_system=='Windows'",
+    "pycaw>=20260927; platform_system=='Windows'",
+    "comtypes>=1.4.8; platform_system=='Windows'",
     "pyobjc-framework-CoreAudio>=9.0; platform_system=='Darwin'",
     "pyudev>=0.24.0; platform_system=='Linux'",
 ]
 
 [project.optional-dependencies]
 # Explicit platform extras for manual installation
-windows = ["pycaw>=20220416", "comtypes>=1.1.14"]
+windows = ["pycaw>=20260927", "comtypes>=1.4.8"]
 macos = ["pyobjc-framework-CoreAudio>=9.0"]
 linux = ["pyudev>=0.24.0"]
 

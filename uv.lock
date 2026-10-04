@@ -36,10 +36,10 @@ windows = [
 [package.metadata]
 requires-dist = [
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.1.14" },
-    { name = "comtypes", marker = "extra == 'windows'", specifier = ">=1.1.14" },
-    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20220416" },
-    { name = "pycaw", marker = "extra == 'windows'", specifier = ">=20220416" },
+    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4.8" },
+    { name = "comtypes", marker = "extra == 'windows'", specifier = ">=1.4.8" },
+    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20260927" },
+    { name = "pycaw", marker = "extra == 'windows'", specifier = ">=20260927" },
     { name = "pyobjc-framework-coreaudio", marker = "sys_platform == 'darwin'", specifier = ">=9.0" },
     { name = "pyobjc-framework-coreaudio", marker = "extra == 'macos'", specifier = ">=9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
