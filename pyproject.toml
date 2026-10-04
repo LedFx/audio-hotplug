@@ -56,7 +56,7 @@ Issues = "https://github.com/LedFx/audio-hotplug/issues"
 Documentation = "https://github.com/LedFx/audio-hotplug#readme"
 
 [build-system]
-requires = ["uv_build>=0.9.13,<0.10.0"]
+requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
