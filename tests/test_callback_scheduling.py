@@ -1,12 +1,65 @@
 """Test callback scheduling (sync and async)."""
 
 import asyncio
+import inspect
 import threading
 import time
+from collections.abc import Awaitable
 
 import pytest
 
 from audio_hotplug._base import AudioDeviceMonitor
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("callable_instance", [False, True])
+async def test_awaitable_returning_callback(callable_instance: bool) -> None:
+    """The Callback contract includes functions and objects returning awaitables."""
+    monitor = MockMonitor()
+    received = asyncio.Event()
+    loop_thread = threading.get_ident()
+    callback_threads = []
+
+    async def delivered() -> None:
+        callback_threads.append(threading.get_ident())
+        received.set()
+
+    def callback() -> Awaitable[None]:
+        return delivered()
+
+    class AsyncCallable:
+        async def __call__(self) -> None:
+            await delivered()
+
+    on_change = AsyncCallable() if callable_instance else callback
+    assert not inspect.iscoroutinefunction(on_change)
+    debouncer = monitor._initialize_debouncer(on_change)
+    try:
+        worker = threading.Thread(target=debouncer._invoke_callback)
+        worker.start()
+        worker.join()
+        await asyncio.wait_for(received.wait(), timeout=2)
+        assert callback_threads == [loop_thread]
+    finally:
+        monitor._cancel_debouncer()
+
+
+@pytest.mark.parametrize("closed_loop", [False, True])
+def test_unschedulable_returned_coroutine_is_closed(
+    closed_loop: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    loop = asyncio.new_event_loop() if closed_loop else None
+    if loop is not None:
+        loop.close()
+    monitor = MockMonitor(loop=loop)
+
+    async def callback() -> None:
+        raise AssertionError("Must never run without a usable loop")
+
+    coroutine = callback()
+    monitor._safe_sync_callback(lambda: coroutine)
+    assert coroutine.cr_frame is None
+    assert "loop" in caplog.text
 
 
 class MockMonitor(AudioDeviceMonitor):

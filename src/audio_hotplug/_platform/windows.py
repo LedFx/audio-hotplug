@@ -1,5 +1,7 @@
 """Windows audio device monitor using Core Audio API (pycaw)."""
 
+from typing_extensions import override
+
 from .._base import Callback
 from ._threaded import ThreadedAudioDeviceMonitor, _WorkerState
 
@@ -7,6 +9,7 @@ from ._threaded import ThreadedAudioDeviceMonitor, _WorkerState
 class WindowsAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
     """Own the notification client and enumerator in one COM apartment."""
 
+    @override
     def start(self, on_change: Callback) -> None:
         # comtypes initializes the importing thread's apartment. Import here so
         # its default STA initialization cannot conflict with our worker's MTA.
@@ -14,6 +17,7 @@ class WindowsAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
 
         super().start(on_change)
 
+    @override
     def _run(self, state: _WorkerState) -> None:
         import comtypes
         from pycaw.api.mmdeviceapi import IMMDeviceEnumerator, IMMNotificationClient
@@ -23,22 +27,26 @@ class WindowsAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
             # Use pycaw's ABI, notably PROPERTYKEY passed by value.
             _com_interfaces_ = [IMMNotificationClient]
 
-            def OnDeviceAdded(self, device_id):  # noqa: N802
+            def OnDeviceAdded(self, device_id: str | None) -> int:  # noqa: N802
                 state.events.put(True)
                 return 0
 
-            def OnDeviceRemoved(self, device_id):  # noqa: N802
+            def OnDeviceRemoved(self, device_id: str | None) -> int:  # noqa: N802
                 state.events.put(True)
                 return 0
 
-            def OnDeviceStateChanged(self, device_id, new_state):  # noqa: N802
+            def OnDeviceStateChanged(
+                self, device_id: str | None, new_state: int
+            ) -> int:  # noqa: N802
                 state.events.put(True)
                 return 0
 
-            def OnDefaultDeviceChanged(self, flow, role, device_id):  # noqa: N802
+            def OnDefaultDeviceChanged(
+                self, flow: int, role: int, device_id: str | None
+            ) -> int:  # noqa: N802
                 return 0
 
-            def OnPropertyValueChanged(self, device_id, key):  # noqa: N802
+            def OnPropertyValueChanged(self, device_id: str | None, key: object) -> int:  # noqa: N802
                 return 0
 
         # A dedicated MTA worker needs no STA message pump. Callbacks only enqueue
@@ -70,6 +78,7 @@ class WindowsAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
         finally:
             self._cancel_debouncer()
             if registered:
+                assert enumerator is not None and client is not None
                 # Do not drop the callback or tear down COM after failed removal:
                 # Windows still holds its pointer. Retry on the next stop request.
                 while True:

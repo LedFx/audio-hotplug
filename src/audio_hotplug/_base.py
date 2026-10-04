@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable
 
 from ._debounce import Debouncer
 
-Callback = Callable[[], None] | Callable[[], Awaitable[None]]
+Callback = Callable[[], None | Awaitable[None]]
 
 
 class AudioDeviceMonitor(ABC):
@@ -24,7 +24,7 @@ class AudioDeviceMonitor(ABC):
         loop: asyncio.AbstractEventLoop | None = None,
         debounce_ms: int = 200,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         """Initialize the monitor.
 
         Args:
@@ -48,7 +48,8 @@ class AudioDeviceMonitor(ABC):
 
         Args:
             on_change: Callback to invoke when device changes detected.
-                      Can be sync or async function.
+                      Can be a sync function, async function, or callable
+                      returning an awaitable.
         """
         pass
 
@@ -57,7 +58,7 @@ class AudioDeviceMonitor(ABC):
         """Stop monitoring. Safe to call multiple times."""
         pass
 
-    def _initialize_debouncer(self, on_change: Callback) -> None:
+    def _initialize_debouncer(self, on_change: Callback) -> Debouncer:
         """Initialize the debouncer with the user callback.
 
         Call this at the start of your platform's start() implementation.
@@ -76,15 +77,16 @@ class AudioDeviceMonitor(ABC):
         self._callback_stop_event = stopped
         if inspect.iscoroutinefunction(on_change):
 
-            async def guarded_callback():
+            async def guarded_callback() -> None:
                 if not stopped.is_set():
                     await on_change()
 
         else:
 
-            def guarded_callback():
+            def guarded_callback() -> None | Awaitable[None]:
                 if not stopped.is_set():
-                    on_change()
+                    return on_change()
+                return None
 
         self._callback = guarded_callback
         self._running = True
@@ -92,6 +94,7 @@ class AudioDeviceMonitor(ABC):
         self._debouncer = Debouncer(
             lambda: self._notify(guarded_callback), delay_ms=self._debounce_ms
         )
+        return self._debouncer
 
     def _cancel_debouncer(self) -> None:
         """Disable this run, including notifications already queued on a loop."""
@@ -122,7 +125,7 @@ class AudioDeviceMonitor(ABC):
                     )
                     return
                 try:
-                    callback()
+                    self._safe_sync_callback(callback)
                 except Exception as e:
                     self._logger.error(f"Error in callback: {e}", exc_info=True)
                 return
@@ -141,10 +144,34 @@ class AudioDeviceMonitor(ABC):
             except RuntimeError:
                 self._logger.warning("Cannot schedule audio callback on a closed loop")
 
-    def _safe_sync_callback(self, callback: Callable[[], None]) -> None:
-        """Wrap sync callback with error handling."""
+    def _safe_sync_callback(self, callback: Callback) -> None:
+        """Invoke a callback and schedule any returned awaitable safely."""
         try:
-            callback()
+            result = callback()
+            # Callable instances and ordinary functions can return awaitables
+            # without being recognized by iscoroutinefunction().
+            if result is not None:
+                loop = self._loop
+                if loop is None:
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        if inspect.iscoroutine(result):
+                            result.close()
+                        self._logger.error(
+                            "Async callback provided but no event loop available"
+                        )
+                        return
+                coroutine = self._safe_async_callback(lambda: result)
+                try:
+                    asyncio.run_coroutine_threadsafe(coroutine, loop)
+                except RuntimeError:
+                    coroutine.close()
+                    if inspect.iscoroutine(result):
+                        result.close()
+                    self._logger.warning(
+                        "Cannot schedule audio callback on a closed loop"
+                    )
         except Exception as e:
             self._logger.error(f"Error in sync callback: {e}", exc_info=True)
 
