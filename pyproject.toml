@@ -1,6 +1,6 @@
 [project]
 name = "audio-hotplug"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cross-platform audio device hotplug detection with debouncing"
 readme = "README.md"
 authors = [
