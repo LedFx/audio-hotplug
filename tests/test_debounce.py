@@ -49,23 +49,24 @@ class TestDebouncer:
     def test_separate_bursts(self):
         """Test that separated bursts each result in callbacks."""
         callback_count = {"count": 0}
+        delivered = threading.Event()
 
         def callback():
             callback_count["count"] += 1
+            delivered.set()
 
         debouncer = Debouncer(callback, delay_ms=50)
 
-        # First burst
-        debouncer.trigger()
-        debouncer.trigger()
-        time.sleep(0.2)  # Wait for first callback (4x for CI)
-
-        # Second burst
-        debouncer.trigger()
-        debouncer.trigger()
-        time.sleep(0.2)  # Wait for second callback (4x for CI)
-
-        assert callback_count["count"] == 2
+        try:
+            for expected_count in (1, 2):
+                delivered.clear()
+                debouncer.trigger()
+                debouncer.trigger()
+                # Start the next burst only after this one is delivered.
+                assert delivered.wait(5), "Debounced callback was not delivered"
+                assert callback_count["count"] == expected_count
+        finally:
+            debouncer.cancel()
 
     def test_thread_safety(self):
         """Test that debouncer is thread-safe."""
@@ -124,14 +125,13 @@ class TestDebouncer:
             callback_count["count"] += 1
             raise ValueError("Test exception")
 
-        debouncer = Debouncer(failing_callback, delay_ms=50)
+        debouncer = Debouncer(failing_callback)
 
-        # Should not raise despite callback exception
-        debouncer.trigger()
-        time.sleep(0.1)
-
-        # Verify callback was called
-        assert callback_count["count"] == 1
+        # Exercise exception handling directly, without depending on when the
+        # OS schedules a timer thread. Timer delivery is tested separately.
+        for expected_count in (1, 2):
+            debouncer._invoke_callback()
+            assert callback_count["count"] == expected_count
 
     def test_varying_delays(self):
         """Test different debounce delays."""

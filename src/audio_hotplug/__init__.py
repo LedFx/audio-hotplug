@@ -8,5 +8,5 @@ with debouncing to prevent event storms.
 from ._base import AudioDeviceMonitor
 from .monitor import create_monitor
 
-__version__ = "0.1.0"
+__version__ = "0.1.0"  # x-release-please-version
 __all__ = ["create_monitor", "AudioDeviceMonitor"]
