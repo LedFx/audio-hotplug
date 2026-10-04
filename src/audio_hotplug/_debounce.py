@@ -8,7 +8,7 @@ from collections.abc import Callable
 class Debouncer:
     """Invoke a callback after a quiet period, with one pending timer per burst."""
 
-    def __init__(self, callback: Callable[[], None], delay_ms: int = 200):
+    def __init__(self, callback: Callable[[], None], delay_ms: int = 200) -> None:
         self._callback = callback
         self._delay_s = delay_ms / 1000.0
         self._timer: threading.Timer | None = None

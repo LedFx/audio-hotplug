@@ -1,21 +1,31 @@
 """macOS audio device monitor using CoreAudio framework."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+from typing_extensions import override
+
+if TYPE_CHECKING:
+    from CoreAudio import AudioObjectPropertyAddress
 
 from .._base import AudioDeviceMonitor, Callback
 from .._debounce import Debouncer
 
 # CoreAudio holds a C pointer, not a Python reference. Keep registered closures
 # alive even if the caller drops its monitor, including after a failed removal.
-_REGISTERED_CALLBACKS = set()
+_NativeCallback = Callable[[int, int, object, object], int]
+_REGISTERED_CALLBACKS: set[_NativeCallback] = set()
 
 
 class _ListenerState:
     """Gate native notifications independently of the monitor lifecycle lock."""
 
-    def __init__(self, debouncer: Debouncer, logger: logging.Logger):
+    def __init__(self, debouncer: Debouncer, logger: logging.Logger) -> None:
         self.debouncer = debouncer
         self.logger = logger
         self.lock = threading.Lock()
@@ -42,13 +52,14 @@ class MacOSAudioDeviceMonitor(AudioDeviceMonitor):
         loop: asyncio.AbstractEventLoop | None = None,
         debounce_ms: int = 200,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         super().__init__(loop=loop, debounce_ms=debounce_ms, logger=logger)
         self._lifecycle_lock = threading.Lock()
-        self._callback_ref = None
-        self._property_address = None
-        self._listener_state = None
+        self._callback_ref: _NativeCallback | None = None
+        self._property_address: AudioObjectPropertyAddress | None = None
+        self._listener_state: _ListenerState | None = None
 
+    @override
     def start(self, on_change: Callback) -> None:
         """Start monitoring. Stop the existing listener before starting again."""
         with self._lifecycle_lock:
@@ -75,15 +86,15 @@ class MacOSAudioDeviceMonitor(AudioDeviceMonitor):
                 kAudioObjectPropertyScopeGlobal,
                 kAudioObjectPropertyElementMaster,
             )
-            self._initialize_debouncer(on_change)
-            state = _ListenerState(self._debouncer, self._logger)
+            debouncer = self._initialize_debouncer(on_change)
+            state = _ListenerState(debouncer, self._logger)
             self._listener_state = state
 
             # CoreAudio retains this callback, so it needs a persistent C closure.
             @objc.callbackFor(AudioObjectAddPropertyListener)
             def device_list_changed_callback(
-                obj_id, num_addresses, addresses, client_data
-            ):
+                obj_id: int, num_addresses: int, addresses: object, client_data: object
+            ) -> int:
                 try:
                     state.changed()
                 except Exception:
@@ -117,6 +128,7 @@ class MacOSAudioDeviceMonitor(AudioDeviceMonitor):
 
         self._logger.info("macOS audio device monitor started")
 
+    @override
     def stop(self) -> None:
         """Stop monitoring; failed native removal can be retried with stop()."""
         with self._lifecycle_lock:
@@ -127,6 +139,7 @@ class MacOSAudioDeviceMonitor(AudioDeviceMonitor):
             if self._callback_ref is None:
                 return
 
+            assert self._property_address is not None
             try:
                 from CoreAudio import (
                     AudioObjectRemovePropertyListener,

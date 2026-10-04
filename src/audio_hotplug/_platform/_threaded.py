@@ -6,16 +6,18 @@ import queue
 import threading
 from abc import abstractmethod
 
+from typing_extensions import override
+
 from .._base import AudioDeviceMonitor, Callback
 from .._debounce import Debouncer
 
 
 class _WorkerState:
-    def __init__(self, debouncer: Debouncer):
+    def __init__(self, debouncer: Debouncer) -> None:
         self.debouncer = debouncer
         self.stopped = threading.Event()
         self.ready = threading.Event()
-        self.events = queue.SimpleQueue()
+        self.events: queue.SimpleQueue[bool | None] = queue.SimpleQueue()
         self.error: Exception | None = None
 
     def stop(self) -> None:
@@ -34,12 +36,13 @@ class ThreadedAudioDeviceMonitor(AudioDeviceMonitor):
         loop: asyncio.AbstractEventLoop | None = None,
         debounce_ms: int = 200,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         super().__init__(loop=loop, debounce_ms=debounce_ms, logger=logger)
         self._lifecycle_lock = threading.Lock()
-        self._monitor_thread = None
-        self._worker_state = None
+        self._monitor_thread: threading.Thread | None = None
+        self._worker_state: _WorkerState | None = None
 
+    @override
     def start(self, on_change: Callback) -> None:
         """Wait for native setup, propagating failures to the caller."""
         with self._lifecycle_lock:
@@ -47,11 +50,11 @@ class ThreadedAudioDeviceMonitor(AudioDeviceMonitor):
                 raise RuntimeError(
                     "Audio monitor worker still active; call stop() first"
                 )
-            self._initialize_debouncer(on_change)
-            state = _WorkerState(self._debouncer)
+            debouncer = self._initialize_debouncer(on_change)
+            state = _WorkerState(debouncer)
             self._worker_state = state
 
-            def worker():
+            def worker() -> None:
                 try:
                     self._run(state)
                 except Exception as error:
@@ -79,6 +82,7 @@ class ThreadedAudioDeviceMonitor(AudioDeviceMonitor):
                     thread.join(self._shutdown_timeout)
                 raise
 
+    @override
     def stop(self) -> None:
         """Disable callbacks and wait for native cleanup; safe to retry."""
         with self._lifecycle_lock:

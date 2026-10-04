@@ -1,0 +1,9 @@
+"""Notification registration from pycaw 20260927's mmdeviceapi declarations."""
+
+from comtypes import COMObject, IUnknown
+
+class IMMNotificationClient(IUnknown): ...
+
+class IMMDeviceEnumerator(IUnknown):
+    def RegisterEndpointNotificationCallback(self, client: COMObject) -> int: ...
+    def UnregisterEndpointNotificationCallback(self, client: COMObject) -> int: ...

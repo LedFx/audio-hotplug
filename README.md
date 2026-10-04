@@ -189,7 +189,10 @@ git clone https://github.com/LedFx/audio-hotplug.git
 cd audio-hotplug
 
 # Install with dev dependencies
-uv sync --extra dev
+uv sync --locked
+
+# Run strict type checking for all platform modules
+uv run pyrefly check
 
 # Run tests
 uv run pytest
@@ -198,7 +201,7 @@ uv run pytest
 uv run python examples/monitor_print.py
 
 # Build package
-uv run python -m build
+uv build
 ```
 
 ## Testing
@@ -245,8 +248,20 @@ Python 3.10–3.15 (including the current 3.15 prerelease). Native audio hardwar
 notifications still need manual platform testing; the automated suite covers
 callback scheduling, debouncing, and monitor construction.
 
-Run `uv sync --extra dev`, `uv run pytest`, and `uvx prek run --all-files`.
-The same lint hooks run before CI tests and distribution builds. Renovate uses
+Run `uv sync --locked`, `uv run pytest`, `uv run pyrefly check`, and
+`uvx prek run --all-files`.
+Pyrefly uses its strict preset, checks Python 3.10 compatibility and every
+platform backend, and rejects explicit `Any` and missing return annotations.
+The focused stubs in `typings/` describe only the native APIs used here; keep
+them aligned with upstream signatures when updating native dependencies. They
+are development-only and are not shipped in the wheel.
+
+Development tools live in dependency groups: `dev` includes `test` and `typing`;
+`build` contains the distribution validator. CI installs only the group each
+job needs. The platform extras remain available as compatibility aliases,
+with OS markers preventing installation of another OS's native packages.
+
+The same lint and strict type checks run before CI tests and distribution builds. Renovate uses
 the shared LedFx configuration, and autofix.ci applies supported lint fixes.
 Use a Conventional Commit PR title so release-please can generate the changelog.
 

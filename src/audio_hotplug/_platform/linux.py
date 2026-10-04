@@ -1,11 +1,14 @@
 """Linux audio device monitor using udev."""
 
+from typing_extensions import override
+
 from ._threaded import ThreadedAudioDeviceMonitor, _WorkerState
 
 
 class LinuxAudioDeviceMonitor(ThreadedAudioDeviceMonitor):
     """Linux audio device monitor using pyudev."""
 
+    @override
     def _run(self, state: _WorkerState) -> None:
         import pyudev
 
