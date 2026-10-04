@@ -213,9 +213,7 @@ The integration code in `ledfx/core.py` is already correct:
 from audio_hotplug import create_monitor
 
 # In LedFx class __init__:
-self._audio_monitor = create_monitor(
-    on_devices_changed=self._on_audio_devices_changed
-)
+self._audio_monitor = create_monitor(on_devices_changed=self._on_audio_devices_changed)
 ```
 
 ### Step 5: Update Documentation

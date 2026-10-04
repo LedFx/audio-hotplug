@@ -258,3 +258,28 @@ def test_closed_loop_does_not_leak_coroutine(is_async, caplog):
     else:
         monitor._notify(Mock())
     assert "closed loop" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("async_callback", [False, True])
+async def test_implicit_loop_from_debounce_thread(async_callback):
+    """Debounced callbacks return to the loop that started the monitor."""
+    monitor = MockMonitor(debounce_ms=1)
+    called = asyncio.Event()
+    loop_thread = threading.get_ident()
+    callback_threads = []
+
+    def callback():
+        callback_threads.append(threading.get_ident())
+        called.set()
+
+    async def coroutine_callback():
+        callback()
+
+    monitor._initialize_debouncer(coroutine_callback if async_callback else callback)
+    try:
+        monitor._debouncer.trigger()
+        await asyncio.wait_for(called.wait(), timeout=2)
+        assert callback_threads == [loop_thread]
+    finally:
+        monitor._debouncer.cancel()

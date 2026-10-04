@@ -1,6 +1,7 @@
 """Abstract base class for audio device monitors."""
 
 import asyncio
+import inspect
 import logging
 import threading
 from abc import ABC, abstractmethod
@@ -73,7 +74,7 @@ class AudioDeviceMonitor(ABC):
                 pass
         stopped = threading.Event()
         self._callback_stop_event = stopped
-        if asyncio.iscoroutinefunction(on_change):
+        if inspect.iscoroutinefunction(on_change):
 
             async def guarded_callback():
                 if not stopped.is_set():
@@ -115,7 +116,7 @@ class AudioDeviceMonitor(ABC):
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 # No running loop, call sync callback directly
-                if asyncio.iscoroutinefunction(callback):
+                if inspect.iscoroutinefunction(callback):
                     self._logger.error(
                         "Async callback provided but no event loop available"
                     )
@@ -127,7 +128,7 @@ class AudioDeviceMonitor(ABC):
                 return
 
         # Schedule on loop thread
-        if asyncio.iscoroutinefunction(callback):
+        if inspect.iscoroutinefunction(callback):
             coroutine = self._safe_async_callback(callback)
             try:
                 asyncio.run_coroutine_threadsafe(coroutine, loop)

@@ -32,8 +32,10 @@ Platform-specific dependencies are installed automatically based on your OS.
 import asyncio
 from audio_hotplug import create_monitor
 
+
 def on_audio_devices_changed():
     print("Audio devices changed!")
+
 
 async def main():
     loop = asyncio.get_running_loop()
@@ -47,6 +49,7 @@ async def main():
         await asyncio.sleep(60)
         monitor.stop()
 
+
 asyncio.run(main())
 ```
 
@@ -57,9 +60,11 @@ asyncio.run(main())
 ```python
 from audio_hotplug import create_monitor
 
+
 def handle_change():
     # Refresh your audio device list here
     print("Device list changed!")
+
 
 monitor = create_monitor()
 if monitor:
@@ -72,10 +77,12 @@ if monitor:
 import asyncio
 from audio_hotplug import create_monitor
 
+
 async def handle_change():
     # Async operations supported
     await notify_websocket_clients()
     print("Device list changed!")
+
 
 async def main():
     loop = asyncio.get_running_loop()
@@ -84,6 +91,7 @@ async def main():
         monitor.start(handle_change)
         await asyncio.sleep(3600)
         monitor.stop()
+
 
 asyncio.run(main())
 ```
@@ -155,6 +163,7 @@ restarting is rejected until the previous registration or worker is gone.
 ```python
 # Sync callback
 def on_change() -> None: ...
+
 
 # Or async callback
 async def on_change() -> None: ...
@@ -228,3 +237,29 @@ Extracted from [LedFx](https://github.com/LedFx/LedFx) to provide a reusable, fo
 - [LedFx](https://github.com/LedFx/LedFx) - Real-time LED visualization system
 - [sounddevice](https://github.com/spatialaudio/python-sounddevice) - Audio I/O library
 - [PortAudio](http://www.portaudio.com/) - Cross-platform audio I/O library
+
+## Development and releases
+
+Python 3.10 and newer is supported. CI tests Linux, Windows, and macOS on
+Python 3.10–3.15 (including the current 3.15 prerelease). Native audio hardware
+notifications still need manual platform testing; the automated suite covers
+callback scheduling, debouncing, and monitor construction.
+
+Run `uv sync --extra dev`, `uv run pytest`, and `uvx prek run --all-files`.
+The same lint hooks run before CI tests and distribution builds. Renovate uses
+the shared LedFx configuration, and autofix.ci applies supported lint fixes.
+Use a Conventional Commit PR title so release-please can generate the changelog.
+
+Releases use the LedFx automation app (`AUTOMATION_APP_CLIENT_ID` and
+`AUTOMATION_APP_PRIVATE_KEY` organisation secrets, accessible to this repository).
+Merging the release-please PR updates package and lockfile versions and creates
+a version tag plus draft GitHub release. Tag CI checks version consistency,
+runs the full test matrix, and builds the distributions before publishing to
+PyPI, then attaches those distributions and publishes the GitHub draft.
+
+Before the first automated release, configure PyPI Trusted Publishing for
+owner `LedFx`, repository `audio-hotplug`, workflow `publish.yml`, and environment
+`pypi`. Keep the GitHub `pypi` environment approval rules in place. The previous
+API-token publishing path is replaced by OIDC; a manual workflow run validates
+CI without publishing. Set the branch's required check to `CI passed` (and
+`Conventional PR title`) instead of the retired individual workflows.
