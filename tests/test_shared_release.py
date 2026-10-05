@@ -1,10 +1,10 @@
 """Consumer authority remains explicit around the pinned shared transaction."""
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED_SHA = "f57f5eced6c74aadb1d432fc349554212d7cf05f"
 
 
 def test_release_workflow_preserves_identity_gates_and_same_run_artifacts() -> None:
@@ -26,7 +26,13 @@ def test_release_workflow_preserves_identity_gates_and_same_run_artifacts() -> N
         assert required in job
     assert "run-id:" not in job
     assert workflow.count("id-token: write") == 1
-    assert job.count("LedFx/release-ci/actions/release@" + SHARED_SHA) == 3
+    pins = re.findall(
+        r"uses: LedFx/release-ci/actions/release@([0-9a-f]{40}) # (v[0-9]+\.[0-9]+\.[0-9]+)\s*$",
+        job,
+        re.MULTILINE,
+    )
+    assert len(pins) == 3 and len(set(pins)) == 1
+    assert job.count("uses: LedFx/release-ci/actions/release@") == 3
     assert job.count("policy: release-tools/.github/release-policy.json") == 3
     assert (
         job.index("phase: prepare")
