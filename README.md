@@ -270,9 +270,20 @@ Releases use the LedFx automation app (`AUTOMATION_APP_CLIENT_ID` and
 Merging the release-please PR updates package and lockfile versions and creates
 a version tag plus draft GitHub release. Tag CI checks version consistency,
 runs the full test matrix, and builds the distributions before publishing to
-PyPI, then attaches those distributions and publishes the GitHub draft.
+PyPI, then attaches those distributions and publishes the GitHub draft last.
+The caller uses the SHA-pinned [shared release transaction](https://github.com/LedFx/release-ci)
+and `.github/release-policy.json`, preserving the `publish.yml`/`pypi` identity.
+The queued job verifies exact wheel/sdist metadata, SHA-256 and GitHub attestations
+before finalization with its scoped App token. Matching partial uploads can retry
+from the original run; conflicting files fail rather than using `--clobber`.
+An existing release-please draft is required. Higher stable drafts/releases veto
+latest promotion; an abandoned newer draft can delay latest without preventing
+immutable version publication. Snapshots and provenance bundles are retained;
+see the shared recovery guide before rerunning failed jobs.
 
-Before the first automated release, configure PyPI Trusted Publishing for
+The PyPI Trusted Publisher is not configured yet; this migration can pass PR CI,
+but actual package publication remains blocked until an administrator configures it.
+Configure PyPI Trusted Publishing for
 owner `LedFx`, repository `audio-hotplug`, workflow `publish.yml`, and environment
 `pypi`. Keep the GitHub `pypi` environment approval rules in place. The previous
 API-token publishing path is replaced by OIDC; a manual workflow run validates
