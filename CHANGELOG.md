@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/LedFx/audio-hotplug/compare/v0.2.0...v0.2.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* isolate PyPI upload sidecars from verified distributions ([#33](https://github.com/LedFx/audio-hotplug/issues/33)) ([b9c510b](https://github.com/LedFx/audio-hotplug/commit/b9c510b79051b83bb1f56eb39465c8527d2d2159))
+
 ## [0.2.0](https://github.com/LedFx/audio-hotplug/compare/v0.1.0...v0.2.0) (2026-10-04)
 
 
