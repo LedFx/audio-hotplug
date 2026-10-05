@@ -1,8 +1,13 @@
 """Consumer authority remains explicit around the pinned shared transaction."""
 
-import json
 import re
+import sys
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,7 +38,7 @@ def test_release_workflow_preserves_identity_gates_and_same_run_artifacts() -> N
     )
     assert len(pins) == 3 and len(set(pins)) == 1
     assert job.count("uses: LedFx/release-ci/actions/release@") == 3
-    assert job.count("policy: release-tools/.github/release-policy.json") == 3
+    assert job.count("project: release-tools") == 3
     assert (
         job.index("phase: prepare")
         < job.index("uses: actions/attest@")
@@ -45,13 +50,14 @@ def test_release_workflow_preserves_identity_gates_and_same_run_artifacts() -> N
     assert "softprops" not in workflow and "--clobber" not in workflow
 
 
-def test_explicit_policy_keeps_pure_python_artifacts() -> None:
-    policy = json.loads((ROOT / ".github/release-policy.json").read_text())
-    assert policy["repository"] == "LedFx/audio-hotplug"
-    assert policy["workflow"] == ".github/workflows/publish.yml"
-    assert policy["python"]["project"] == "audio-hotplug"
-    tags = policy["python"]["wheel_tags"]
-    assert tags == ["py3-none-any"]
-    assert policy["python"]["sdist"] == "audio_hotplug-{version}.tar.gz"
-    assert policy["github_assets"] == {"distributions": True, "files": []}
-    assert policy["oci"] == []
+def test_project_metadata_keeps_pure_python_artifacts() -> None:
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    assert config["project"]["name"] == "audio-hotplug"
+    assert "cibuildwheel" not in config["tool"]
+    assert "release-ci" not in config["tool"]
+    assert not (ROOT / ".github/release-policy.json").exists()
+    workflow = (ROOT / ".github/workflows/publish.yml").read_text()
+    assert "pyproject.toml" in workflow
+    assert "sparse-checkout-cone-mode: false" in workflow
+    assert "actions/plan@" not in workflow
+    assert "policy:" not in workflow

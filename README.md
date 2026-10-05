@@ -272,7 +272,8 @@ a version tag plus draft GitHub release. Tag CI checks version consistency,
 runs the full test matrix, and builds the distributions before publishing to
 PyPI, then attaches those distributions and publishes the GitHub draft last.
 The caller uses the SHA-pinned [shared release transaction](https://github.com/LedFx/release-ci)
-and `.github/release-policy.json`, preserving the `publish.yml`/`pypi` identity.
+with the existing `[project]` metadata in `pyproject.toml`, preserving the
+`publish.yml`/`pypi` identity. The pure wheel and sdist use library defaults.
 The queued job verifies exact wheel/sdist metadata, SHA-256 and GitHub attestations
 before finalization with its scoped App token. Matching partial uploads can retry
 from the original run; conflicting files fail rather than using `--clobber`.
