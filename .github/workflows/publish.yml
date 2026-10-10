@@ -14,6 +14,29 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version_only: ${{ steps.version_scope.outputs.version_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # version-scope diffs PRs against origin/main: merge refs carry no
+          # parents without full history.
+          fetch-depth: 0
+      - id: version_scope
+        uses: LedFx/release-ci/actions/version-scope@12ea4ced7288cb6b0f3a8aafbac3e825969c17ca # v0.4.2
+        with:
+          package-name: audio-hotplug
+          versioned-manifests: |
+            pyproject.toml
+            uv.lock
+          simple-version-files: |
+            src/audio_hotplug/__init__.py
+
   lint:
     name: Lint (prek)
     runs-on: ubuntu-latest
@@ -31,7 +54,8 @@ jobs:
           prek-version: '0.5.3'
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python }})
-    needs: lint
+    needs: [lint, plan]
+    if: needs.plan.outputs.version_only != 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -52,7 +76,8 @@ jobs:
       - name: Test
         run: uv run --no-sync pytest -v --cov=audio_hotplug --cov-report=term
   build:
-    needs: lint
+    needs: [lint, plan]
+    if: needs.plan.outputs.version_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -91,18 +116,24 @@ jobs:
           if-no-files-found: error
   ci-passed:
     name: CI passed
-    needs: [lint, test, build]
+    needs: [plan, lint, test, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require every check
+      # Version-only release bumps legitimately skip test/build; lint always runs.
+      - name: Require lint even for metadata-only changes
+        if: needs.lint.result != 'success'
+        run: exit 1
+      - name: Require native coverage unless the diff is release metadata
+        if: needs.plan.outputs.version_only != 'true'
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           python3 - <<'PY'
           import json, os
-          assert all(job['result'] == 'success' for job in json.loads(os.environ['RESULTS']).values())
+          results = json.loads(os.environ['RESULTS'])
+          assert all(v['result'] == 'success' for k, v in results.items() if k != 'plan'), results
           PY
   publish-release:
     name: Publish verified package release
