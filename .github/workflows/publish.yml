@@ -28,62 +28,15 @@ jobs:
           # parents without full history.
           fetch-depth: 0
       - id: version_scope
-        env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-        run: |
-          case "$EVENT" in
-            pull_request) base="origin/main...HEAD" ;;
-            push)
-              if [[ "$REF" == refs/tags/* ]]; then exit 0; fi
-              base="HEAD^"
-              ;;
-            *) exit 0 ;; # schedule and manual runs always build
-          esac
-          export SCOPE_BASE="$base"
-          scope=$(python3 - <<'PY'
-          import os, re, subprocess
+        uses: LedFx/release-ci/actions/version-scope@442e00705d4e5edd589021851e756761363f9d84 # v0.3.1
+        with:
+          package-name: audio-hotplug
+          versioned-manifests: |
+            pyproject.toml
+            uv.lock
+          simple-version-files: |
+            src/audio_hotplug/__init__.py
 
-          def git(*args: str) -> str:
-              result = subprocess.run(
-                  ["git", *args], capture_output=True, text=True, timeout=30
-              )
-              return result.stdout if result.returncode == 0 else ""
-
-          files = set(git("diff", "--name-only", os.environ["SCOPE_BASE"], "HEAD").split())
-          if not files:
-              print("false")  # empty or unreadable diff: build everything
-              raise SystemExit
-          prose = {"CHANGELOG.md", ".release-please-manifest.json"}
-          manifests = {"pyproject.toml", "uv.lock"}
-          rest = files - manifests
-          if rest and not rest <= prose:
-              print("false")
-              raise SystemExit
-          anchors = ('name="audio-hotplug"', "[package]", "[project]")
-          for name in sorted(files & manifests):
-              patch = git("diff", "--unified=0", os.environ["SCOPE_BASE"], "HEAD", "--", name)
-              if not patch:
-                  print("false")
-                  raise SystemExit
-              for hunk in re.split(r"^@@", patch, flags=re.MULTILINE)[1:]:
-                  lines = hunk.splitlines()
-                  parts = lines[0].split(maxsplit=3)
-                  anchor = parts[3].lstrip() if len(parts) > 3 else ""
-                  changed = [
-                      line[1:].lstrip()
-                      for line in lines[1:]
-                      if line[:1] in {"+", "-"}
-                  ]
-                  ok = bool(changed) and all(c.startswith("version") for c in changed)
-                  ok = ok and anchor.replace(" ", "").startswith(anchors)
-                  if not ok:
-                      print("false")
-                      raise SystemExit
-          print("true")
-          PY
-          )
-          echo "version_only=$scope" >> "$GITHUB_OUTPUT"
   lint:
     name: Lint (prek)
     runs-on: ubuntu-latest
