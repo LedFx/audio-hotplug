@@ -28,7 +28,7 @@ jobs:
           # parents without full history.
           fetch-depth: 0
       - id: version_scope
-        uses: LedFx/release-ci/actions/version-scope@442e00705d4e5edd589021851e756761363f9d84 # v0.3.1
+        uses: LedFx/release-ci/actions/version-scope@f6b0dd14fcd45d61d71fbe8e5ec2d3f1588f1b68 # v0.4.0
         with:
           package-name: audio-hotplug
           versioned-manifests: |
