@@ -14,6 +14,76 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version_only: ${{ steps.version_scope.outputs.version_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # version-scope diffs PRs against origin/main: merge refs carry no
+          # parents without full history.
+          fetch-depth: 0
+      - id: version_scope
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          case "$EVENT" in
+            pull_request) base="origin/main...HEAD" ;;
+            push)
+              if [[ "$REF" == refs/tags/* ]]; then exit 0; fi
+              base="HEAD^"
+              ;;
+            *) exit 0 ;; # schedule and manual runs always build
+          esac
+          export SCOPE_BASE="$base"
+          scope=$(python3 - <<'PY'
+          import os, re, subprocess
+
+          def git(*args: str) -> str:
+              result = subprocess.run(
+                  ["git", *args], capture_output=True, text=True, timeout=30
+              )
+              return result.stdout if result.returncode == 0 else ""
+
+          files = set(git("diff", "--name-only", os.environ["SCOPE_BASE"], "HEAD").split())
+          if not files:
+              print("false")  # empty or unreadable diff: build everything
+              raise SystemExit
+          prose = {"CHANGELOG.md", ".release-please-manifest.json"}
+          manifests = {"pyproject.toml", "uv.lock"}
+          rest = files - manifests
+          if rest and not rest <= prose:
+              print("false")
+              raise SystemExit
+          anchors = ('name="audio-hotplug"', "[package]", "[project]")
+          for name in sorted(files & manifests):
+              patch = git("diff", "--unified=0", os.environ["SCOPE_BASE"], "HEAD", "--", name)
+              if not patch:
+                  print("false")
+                  raise SystemExit
+              for hunk in re.split(r"^@@", patch, flags=re.MULTILINE)[1:]:
+                  lines = hunk.splitlines()
+                  parts = lines[0].split(maxsplit=3)
+                  anchor = parts[3].lstrip() if len(parts) > 3 else ""
+                  changed = [
+                      line[1:].lstrip()
+                      for line in lines[1:]
+                      if line[:1] in {"+", "-"}
+                  ]
+                  ok = bool(changed) and all(c.startswith("version") for c in changed)
+                  ok = ok and anchor.replace(" ", "").startswith(anchors)
+                  if not ok:
+                      print("false")
+                      raise SystemExit
+          print("true")
+          PY
+          )
+          echo "version_only=$scope" >> "$GITHUB_OUTPUT"
   lint:
     name: Lint (prek)
     runs-on: ubuntu-latest
@@ -31,7 +101,8 @@ jobs:
           prek-version: '0.5.3'
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python }})
-    needs: lint
+    needs: [lint, plan]
+    if: needs.plan.outputs.version_only != 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -52,7 +123,8 @@ jobs:
       - name: Test
         run: uv run --no-sync pytest -v --cov=audio_hotplug --cov-report=term
   build:
-    needs: lint
+    needs: [lint, plan]
+    if: needs.plan.outputs.version_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -91,18 +163,24 @@ jobs:
           if-no-files-found: error
   ci-passed:
     name: CI passed
-    needs: [lint, test, build]
+    needs: [plan, lint, test, build]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require every check
+      # Version-only release bumps legitimately skip test/build; lint always runs.
+      - name: Require lint even for metadata-only changes
+        if: needs.lint.result != 'success'
+        run: exit 1
+      - name: Require native coverage unless the diff is release metadata
+        if: needs.plan.outputs.version_only != 'true'
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           python3 - <<'PY'
           import json, os
-          assert all(job['result'] == 'success' for job in json.loads(os.environ['RESULTS']).values())
+          results = json.loads(os.environ['RESULTS'])
+          assert all(v['result'] == 'success' for k, v in results.items() if k != 'plan'), results
           PY
   publish-release:
     name: Publish verified package release
